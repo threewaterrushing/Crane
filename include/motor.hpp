@@ -15,10 +15,10 @@ HardwareSerial motor_serial(1);
 #define PI  3.1415926535897932384626433832795
 
 //释放箱体高度
-#define release_z 600    //Z轴释放位置，未确定，以实际为准
-#define pick_z_H 3000    //铁架台上层可直接吸取高度
-#define enter_z  1000    //吸盘能进入铁架台下层的高度
-#define pick_z_L 800    //铁架台下层可直接吸取高度
+float release_z;     //Z轴释放位置，未确定，以实际为准
+float pick_z_H;     //铁架台上层可直接吸取高度
+float enter_z_L;    //吸盘能进入铁架台下层的高度
+float pick_z_L;  //铁架台下层可直接吸取高度
 
 //一些参数
 #define CW 0x00
@@ -153,90 +153,72 @@ void move_to_paper(int box_Id){
 
 
 //运动到对应箱子的可夹取坐标
-void move_to_Box(int iron_Id){
-    float x,y,z;
-    switch(iron_Id){   //此数据不真实待完善
-    case 1://a
-        x=1895;
-        y=3250;
-        z=pick_z_H;
-        break;
+void move_to_Box(int box_id){
+    int index=box_id-1;
+    float x=box_pick_coordinate[index].x;
+    float y=box_pick_coordinate[index].y;
+    float z=0;
+    if(box_pick_coordinate[index].is_L==true){        //是下层的三个箱子之一
+        move_to_z(enter_z_L,0x0300);
+        while(Z_Motor.EmmV5_ReadCurRPM()!=0){
+            delay(10);
+        }
+        move_to_x(x,0x0300);
+        move_to_y(y,0x0300);
+        while(X_Motor.EmmV5_ReadCurRPM()!=0 && Y_leftMotor.EmmV5_ReadCurRPM()!=0 && Y_rightMotor.EmmV5_ReadCurRPM()!=0){
+            delay(10);
+        } 
+        move_to_z(pick_z_L,0x0300);
+        while(Z_Motor.EmmV5_ReadCurRPM()!=0){
+            delay(10);
+        }
 
-    case 2://b
-        x=1690;
-        y=3895;
-        z=pick_z_H;
-        break;
-
-    case 3://c
-        x=1230;
-        y=3895;
-        z=pick_z_H;
-        break;
-    case 4://d
-        x=770;
-        y=3895;
-        z=enter_z;
-        break;
-    
-    case 5://e
-        x=310;
-        y=3895;
-        z=enter_z;
-        break;
-    
-    case 6://f
-        x=105;
-        y=3250;
-        z=enter_z;
-        break;
-    
-    default:
-        break;
+    }else{                                            //是上层的三个箱子之一
+        move_to_x(x,0x0300);
+        move_to_y(y,0x0300);
+        while(X_Motor.EmmV5_ReadCurRPM()!=0 && Y_leftMotor.EmmV5_ReadCurRPM()!=0 && Y_rightMotor.EmmV5_ReadCurRPM()!=0){
+            delay(10);
+        }
+        move_to_z(pick_z_H,0x0300);
+        while(Z_Motor.EmmV5_ReadCurRPM()!=0){
+            delay(10);
+        }
     }
-    
-    //运动到对应的坐标
-    //先x，z
-    move_to_x(x,0x0300);//x
-    move_to_z(z,0x0300);//z
-    
-    
-    //开启x，z同步
-    X_Motor.sync_Motor_enable();  //x，z两电机一起 开始运动
-    delay(10);  //防止刚开始还没来得及运动就进入死循环  
-    while(X_Motor.EmmV5_ReadCurRPM()!=0 && Z_Motor.EmmV5_ReadCurRPM()!=0){
-        delay(100);  //等待x,z电机到位
-    }
-    
-    //再y
-    move_to_y(y,0x0300); //y轴运动内置同步
-    delay(10);
-    while(Y_leftMotor.EmmV5_ReadCurRPM()!=0 && Y_rightMotor.EmmV5_ReadCurRPM()!=0){
-        delay(100);  //等待Y轴电机到位
-    }
-
-    //z轴需要再往下一步
-    move_to_z(float(pick_z_L),0x0300);  //此时4个吸盘已经贴紧箱体，以求4个吸盘都能吸上 
-
 
 }
 
 //针对一个箱子的整个抓取过程
-void complete_one_box(uint8_t* box){
-    bool has_ratation=false;    //是否旋转过
-    move_to_Box(int(box[2]));
+// 假设在某个头文件中已经包含了以下声明
+#include "controller.hpp"
+#include "motor.hpp"
+#include "sucker.hpp"
+#include "rotation.hpp"
+
+// 针对一个箱子的整个抓取过程
+void complete_one_box(int box_id, int paper_id) {
+    bool has_ratation = false;    // 是否旋转过
+
+    // 运动到对应箱子的可夹取坐标
+    move_to_Box(box_id);
     pick_up();
-    move_to_paper(int(box[3]));
-    
-    if(box[3]==0x01 || box[3]==0x06){
-        has_ratation=true;
+
+    // 运动到对应纸垛位置
+    move_to_paper(paper_id);
+
+    // 判断是否需要旋转
+    if (box_pick_coordinate->is_need_rotation==true) {
         rotate_to_start();
+        has_ratation = true;
     }
+
+    // 释放箱子
     release();
-    if(has_ratation==true){//如果旋转过一次，则转回去
+    
+
+    // 如果旋转过一次，则转回去
+    if (has_ratation == true) {
         rotate_to_angle_1();
     }
-    
 }
 
 
@@ -272,6 +254,40 @@ void Y_rezero(uint16_t speed){
 
 
 }
+
+
+//！！！！！！！！！！！！！！！！！！！主任务
+void main_task(){
+
+    //使用上电自动回零 上位机调参
+    delay(5000);//等待回零完成
+    
+    //旋转等待视觉读取数据
+    //rotate_to_angle_1();
+    ////delay(5000);
+    //rotate_to_start();
+   // delay(5000);
+    
+    //请求视觉数据
+   // handshake_with_vision();
+    //获取视觉数据并添加到Box的结构体
+   // get_vision_data();
+    
+    //按照箱子的实际序号
+    //开抓     
+    for(int i=0;i<6;i++){
+        complete_one_box(i+1,i+1);
+    }
+
+    //抓取任务完成需要回到铁架台一侧
+    move_to_y(1000,0x0300);
+
+    //任务完成 蜂鸣器响
+    Buzz();
+
+
+
+    }  
 
 
 

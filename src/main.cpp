@@ -12,6 +12,11 @@
 #include"motor.hpp"
 #include"rotation.hpp"
 #include"sucker.hpp"
+#include<PSX.h>
+#include"controller.hpp"
+#include<HardwareSerial.h>
+
+
 
 
 //引脚
@@ -73,41 +78,7 @@ BOX Box;
 
     
 
-    //！！！！！！！！！！！！！！！！！！！主任务
-    void main_task(BOX Box){
-
-    //使用上电自动回零 上位机调参
-    delay(5000);//等待回零完成
     
-    //旋转等待视觉读取数据
-    rotate_to_angle_1();
-    delay(5000);
-    rotate_to_start();
-    delay(5000);
-    
-    //请求视觉数据
-    handshake_with_vision();
-    //获取视觉数据并添加到Box的结构体
-    get_vision_data();
-    
-    //按照箱子的实际序号
-    //开抓     
-    complete_one_box(Box.box_1);
-    complete_one_box(Box.box_2);
-    complete_one_box(Box.box_3);
-    complete_one_box(Box.box_4);
-    complete_one_box(Box.box_5);
-    complete_one_box(Box.box_6);
-
-    //抓取任务完成需要回到铁架台一侧
-    move_to_y(1000,0x0300);
-
-    //任务完成 蜂鸣器响
-    Buzz();
-
-
-
-    }  
     
 
 
@@ -136,6 +107,10 @@ void setup(){
     Serial.println("Initializing vision serial...");
     vision_serial.begin(115200, SERIAL_8N1, 16, 17);
     Serial.println("Vision serial initialized.");
+
+    //ps2初始化
+    ps2.setupPins(dataPin, cmdPin, attPin, clockPin, 10);
+    ps2.config(PSXMODE_ANALOG);
     
     
     //舵机初始化
@@ -147,7 +122,7 @@ void setup(){
     Serial.println("Setup completed");
 
     //主任务
-    main_task(Box);
+    main_task();
     
 
 
